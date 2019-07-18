@@ -17,47 +17,7 @@ function render(vnode, container) {
   }
 }
 
-const domPropsRE = /\W|^(?:value|checked|selected|muted)$/;
-
-const dataMap = new Map();
-dataMap.set(undefined, (key, prop, el) => {
-  // event
-  let eventName;
-
-  if (key[0] === 'o' && key[1] === 'n') {
-    eventName = key.slice(2);
-  } else if (key[0] === '@') {
-    eventName = key.slice(1);
-  }
-
-  if (eventName) {
-    el.addEventListener(eventName, prop, false);
-
-    return;
-  }
-
-  // normal props
-  if (domPropsRE.test(key)) {
-    el[key] = prop;
-  } else {
-    el.setAttribute(key, prop);
-  }
-});
-dataMap.set('style', (styles, el) => {
-  for (let [k, s] of Object.entries(styles)) {
-    if (k === 'width' || k === 'height') {
-      s = `${s}px`;
-    }
-    el.style[k] = s;
-  }
-});
-dataMap.set('class', (className, el) => {
-  if (typeof className === 'string') {
-    el.className = className;
-  } else if (Array.isArray(className)) {
-    el.className = className.filter(Boolean).join(' ');
-  }
-});
+// ========================== mount ==========================
 
 function mount(vnode, container, isSVG) {
   const { flags } = vnode;
@@ -93,11 +53,7 @@ function mountElement(vnode, container, isSVG) {
 
   if (vnode.data != null) {
     for (const [key, prop] of Object.entries(vnode.data)) {
-      if (dataMap.has(key)) {
-        dataMap.get(key)(prop, el);
-      } else {
-        dataMap.get(undefined)(key, prop, el);
-      }
+      patchData(vnode.el, key, null, prop);
     }
   }
 
@@ -181,8 +137,86 @@ function mountComponent(vnode, container, isSVG) {
   const { flags } = vnode;
 
   if (flags & VNodeFlags.COMPONENT_FUNCTIONAL) {
-    mountComponentFunctional(vnode, container, isSVG);
+    mountFunctionalComponent(vnode, container, isSVG);
   } else if (flags & VNodeFlags.COMPONENT_STATEFUL) {
-    mountComponentStateful(vnode, container, isSVG);
+    mountStatefulComponent(vnode, container, isSVG);
   }
 }
+
+function mountFunctionalComponent(vnode, container, isSvg) {
+  const $vnode = vnode.tag();
+
+  mount($vnode, container, isSvg);
+  vnode.el = $vnode.el;
+}
+
+function mountStatefulComponent(vnode, container, isSVG) {
+  const instance = new vnode.tag();
+  instance.$vnode = instance.render();
+
+  mount(instance.$vnode, container, isSVG);
+  instance.$el = vnode.el = instance.$vnode.el;
+}
+
+// ========================== mount ==========================
+
+// ========================== patch ==========================
+
+function patch(preVNode, nextVNode, container) {
+  const preFlags = preVNode.flags;
+  const nextFlags = nextVNode.flags;
+
+  if (preFlags !== nextFlags) {
+    replaceVNode(preVNode, nextVNode, container);
+  } else if (nextFlags & VNodeFlags.ELEMENT) {
+    patchElement(preVNode, nextVNode, container);
+  } else if (nextFlags & VNodeFlags.TEXT) {
+    patchText(preVNode, nextVNode, container);
+  } else if (nextFlags & VNodeFlags.FRAGMENT) {
+    patchFragment(preVNode, nextVNode, container);
+  } else if (nextFlags & VNodeFlags.PORTAL) {
+    patchPortal(preVNode, nextVNode, container);
+  } else if (nextFlags & VNodeFlags.COMPONENT) {
+    patchComponent(preVNode, nextVNode, container);
+  }
+}
+
+function replaceVNode(preVNode, nextVNode, container) {
+  container.removeChild(preVNode.el);
+
+  mount(nextVNode);
+}
+
+function patchElement(preVNode, nextVNode, container) {
+  if (preVNode.tag !== nextVNode.tag) {
+    replaceVNode(preVNode, nextVNode, container);
+
+    return;
+  }
+
+  const el = (nextVNode.el = preVNode.el);
+  const preData = preVNode.data || {};
+  const nextData = nextVNode.data || {};
+
+  for (const [key, prop] of Object.entries(nextData)) {
+    patchData(el, key, preData[key], prop);
+  }
+
+  for (const [key, prop] of Object.entries(preData)) {
+    if (preData && !nextData.hasOwnProperty(key)) {
+      patchData(el, key, prop, null);
+    }
+  }
+
+  patchChildren(
+    preVNode.childFlags,
+    nextVNode.childFlags,
+    preVNode.children,
+    preVNode.children,
+    el
+  );
+}
+
+function patchChildren(preFlags, nextFlags, preChildren, nextChildren) {}
+
+// ========================== patch ==========================
