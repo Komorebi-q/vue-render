@@ -35,7 +35,7 @@ const vnode = {
   childrenFlags: 'childrenFlags'
 };
 
-function normalize(children) {
+function normalizeVNodes(children) {
   const newChildren = [];
 
   for (const [i, child] of children.entries()) {
@@ -64,7 +64,6 @@ function createTextVNode(text) {
 function h(tag, data = null, children = []) {
   let flags;
   let childFlags;
-
   // flags
   if (typeof tag === 'string') {
     if (tag === 'svg') {
@@ -73,7 +72,7 @@ function h(tag, data = null, children = []) {
       flags = VNodeFlags.ELEMENT_HTML;
     }
   } else if (tag === FRAGMENT) {
-    flags === VNodeFlags.FRAGMENT;
+    flags = VNodeFlags.FRAGMENT;
   } else if (tag === PORTAL) {
     flags = VNodeFlags.PORTAL;
     tag = data && data.target;
@@ -114,8 +113,6 @@ function h(tag, data = null, children = []) {
       children = createTextVNode(children + '');
     }
   }
-
-  console.log(children);
 
   return {
     isVNode: true,
